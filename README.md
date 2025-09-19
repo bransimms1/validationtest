@@ -7,3 +7,8 @@ What this does:
 5. Loops over and pulls every image you listed for each registry.
 6. Curls the iDRAC endpoint and console.redhat.com, showing HTTP status codes.
 7. Logs out of the Red Hat registries at the end.
+
+
+How to Run:
+
+ansible-playbook -i your_inventory validationtest.yml
