@@ -3,48 +3,9 @@
   hosts: all
   become: true
 
-  vars_prompt:
-    - name: openshift_api
-      prompt: "Enter the OpenShift API hostname (e.g. api.cluster.example.com)"
-      private: no
-
-    - name: openshift_api_port
-      prompt: "Enter the OpenShift API port (default 6443)"
-      default: "6443"
-      private: no
-
-    - name: openshift_apps_host
-      prompt: "Enter a sample hostname under your OpenShift apps wildcard (e.g. console.apps.cluster.example.com)"
-      private: no
-
-    - name: apps_port
-      prompt: "Enter the apps host port to check (default 443)"
-      default: "443"
-      private: no
-
-    - name: rh_username
-      prompt: "Enter your Red Hat registry username"
-      private: no
-
-    - name: rh_password
-      prompt: "Enter your Red Hat registry password"
-      private: yes
-
-    - name: idrac_host
-      prompt: "Enter the iDRAC IP or hostname"
-      private: no
-
-    - name: registry_redhat_io_images
-      prompt: "Enter comma-separated images from registry.redhat.io"
-      private: no
-
-    - name: registry_access_images
-      prompt: "Enter comma-separated images from registry.access.redhat.com"
-      private: no
-
-    - name: quay_images
-      prompt: "Enter comma-separated images from quay.io"
-      private: no
+  # Load all variables from an external file
+  vars_files:
+    - vars.yml
 
   vars:
     console_redhat_url: "https://console.redhat.com/"
