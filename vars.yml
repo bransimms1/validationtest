@@ -1,0 +1,13 @@
+openshift_api: api.cluster.example.com
+openshift_api_port: 6443
+openshift_apps_host: console.apps.cluster.example.com
+apps_port: 443
+
+rh_username: myrhuser
+rh_password: myrhpassword
+
+idrac_host: 10.0.0.5
+
+registry_redhat_io_images: rhel8/rhel:latest,openshift4/ose-pod:v4.15
+registry_access_images: ubi8/ubi:latest
+quay_images: openshift-release-dev/ocp-release:4.15.0-x86_64
