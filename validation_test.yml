@@ -1,9 +1,8 @@
 ---
-- name: Pull images, validate OpenShift DNS/ports, and curl endpoints
+- name: Pull images, validate OpenShift DNS/ports, NTP server, and curl endpoints
   hosts: all
   become: true
 
-  # Load all variables from an external file
   vars_files:
     - vars.yml
 
@@ -13,7 +12,7 @@
     console_response_file: "/tmp/console_redhat_response.html"
 
   tasks:
-    # --- DNS validation ---
+    # --- DNS validation (OpenShift API) ---
     - name: Check DNS resolution for OpenShift API
       command: "host {{ openshift_api }}"
       register: dns_api
@@ -24,7 +23,8 @@
       debug:
         var: dns_api.stdout
 
-    - name: Check DNS resolution for OpenShift apps wildcard (sample host)
+    # --- DNS validation (OpenShift apps wildcard host) ---
+    - name: Check DNS resolution for OpenShift apps host
       command: "host {{ openshift_apps_host }}"
       register: dns_apps
       changed_when: false
@@ -34,7 +34,7 @@
       debug:
         var: dns_apps.stdout
 
-    # --- Port reachability checks ---
+    # --- Port checks ---
     - name: Check port {{ openshift_api_port }} on OpenShift API host
       wait_for:
         host: "{{ openshift_api }}"
@@ -48,6 +48,40 @@
         port: "{{ apps_port }}"
         timeout: 5
         state: started
+
+    # --- NTP server checks ---
+    - name: Check DNS resolution for NTP server
+      command: "host {{ ntp_server }}"
+      register: dns_ntp
+      changed_when: false
+      failed_when: dns_ntp.rc != 0
+
+    - name: Show DNS result for NTP server
+      debug:
+        var: dns_ntp.stdout
+
+    - name: Check UDP 123 connectivity to NTP server
+      wait_for:
+        host: "{{ ntp_server }}"
+        port: 123
+        timeout: 5
+        state: started
+        udp: yes
+
+    - name: Ensure ntpdate is installed
+      package:
+        name: ntpdate
+        state: present
+
+    - name: Test NTP query against server with ntpdate
+      command: "ntpdate -q {{ ntp_server }}"
+      register: ntpdate_out
+      changed_when: false
+      failed_when: ntpdate_out.rc != 0
+
+    - name: Display NTP query output
+      debug:
+        var: ntpdate_out.stdout
 
     # --- Ensure podman installed ---
     - name: Ensure podman is installed
