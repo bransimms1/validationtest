@@ -1,9 +1,27 @@
 ---
-- name: Pull multiple images from registries and curl endpoints
+- name: Pull images, validate OpenShift DNS/ports, and curl endpoints
   hosts: all
   become: true
 
   vars_prompt:
+    - name: openshift_api
+      prompt: "Enter the OpenShift API hostname (e.g. api.cluster.example.com)"
+      private: no
+
+    - name: openshift_api_port
+      prompt: "Enter the OpenShift API port (default 6443)"
+      default: "6443"
+      private: no
+
+    - name: openshift_apps_host
+      prompt: "Enter a sample hostname under your OpenShift apps wildcard (e.g. console.apps.cluster.example.com)"
+      private: no
+
+    - name: apps_port
+      prompt: "Enter the apps host port to check (default 443)"
+      default: "443"
+      private: no
+
     - name: rh_username
       prompt: "Enter your Red Hat registry username"
       private: no
@@ -17,15 +35,15 @@
       private: no
 
     - name: registry_redhat_io_images
-      prompt: "Enter comma-separated images from registry.redhat.io (e.g. rhel8/rhel:latest,openshift4/ose-pod:v4.15)"
+      prompt: "Enter comma-separated images from registry.redhat.io"
       private: no
 
     - name: registry_access_images
-      prompt: "Enter comma-separated images from registry.access.redhat.com (e.g. ubi8/ubi:latest,ubi8-minimal:latest)"
+      prompt: "Enter comma-separated images from registry.access.redhat.com"
       private: no
 
     - name: quay_images
-      prompt: "Enter comma-separated images from quay.io (e.g. openshift-release-dev/ocp-release:4.15.0-x86_64,coreos/etcd:v3.5)"
+      prompt: "Enter comma-separated images from quay.io"
       private: no
 
   vars:
@@ -34,11 +52,49 @@
     console_response_file: "/tmp/console_redhat_response.html"
 
   tasks:
+    # --- DNS validation ---
+    - name: Check DNS resolution for OpenShift API
+      command: "host {{ openshift_api }}"
+      register: dns_api
+      changed_when: false
+      failed_when: dns_api.rc != 0
+
+    - name: Show DNS result for OpenShift API
+      debug:
+        var: dns_api.stdout
+
+    - name: Check DNS resolution for OpenShift apps wildcard (sample host)
+      command: "host {{ openshift_apps_host }}"
+      register: dns_apps
+      changed_when: false
+      failed_when: dns_apps.rc != 0
+
+    - name: Show DNS result for OpenShift apps host
+      debug:
+        var: dns_apps.stdout
+
+    # --- Port reachability checks ---
+    - name: Check port {{ openshift_api_port }} on OpenShift API host
+      wait_for:
+        host: "{{ openshift_api }}"
+        port: "{{ openshift_api_port }}"
+        timeout: 5
+        state: started
+
+    - name: Check port {{ apps_port }} on OpenShift apps host
+      wait_for:
+        host: "{{ openshift_apps_host }}"
+        port: "{{ apps_port }}"
+        timeout: 5
+        state: started
+
+    # --- Ensure podman installed ---
     - name: Ensure podman is installed
       package:
         name: podman
         state: present
 
+    # --- Log in to registries ---
     - name: Log in to registry.redhat.io
       containers.podman.podman_login:
         registry: registry.redhat.io
@@ -51,6 +107,7 @@
         username: "{{ rh_username }}"
         password: "{{ rh_password }}"
 
+    # --- Pull images ---
     - name: Pull images from registry.redhat.io
       containers.podman.podman_image:
         name: "registry.redhat.io/{{ item }}"
@@ -66,6 +123,7 @@
         name: "quay.io/{{ item }}"
       loop: "{{ quay_images.split(',') | map('trim') | list }}"
 
+    # --- Curl endpoints ---
     - name: Curl iDRAC interface
       uri:
         url: "https://{{ idrac_host }}/redfish/v1/Systems/System.Embedded.1"
@@ -99,6 +157,7 @@
       debug:
         msg: "console.redhat.com returned HTTP status {{ console_response.status }} and was saved to {{ console_response_file }}"
 
+    # --- Log out ---
     - name: Log out from registry.redhat.io
       containers.podman.podman_logout:
         registry: registry.redhat.io
