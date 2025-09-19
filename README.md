@@ -10,5 +10,5 @@ What this does:
 
 
 How to Run:
-
+Replace Variables in vars.yml file
 ansible-playbook -i your_inventory validationtest.yml
