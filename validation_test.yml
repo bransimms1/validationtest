@@ -1,0 +1,108 @@
+---
+- name: Pull multiple images from registries and curl endpoints
+  hosts: all
+  become: true
+
+  vars_prompt:
+    - name: rh_username
+      prompt: "Enter your Red Hat registry username"
+      private: no
+
+    - name: rh_password
+      prompt: "Enter your Red Hat registry password"
+      private: yes
+
+    - name: idrac_host
+      prompt: "Enter the iDRAC IP or hostname"
+      private: no
+
+    - name: registry_redhat_io_images
+      prompt: "Enter comma-separated images from registry.redhat.io (e.g. rhel8/rhel:latest,openshift4/ose-pod:v4.15)"
+      private: no
+
+    - name: registry_access_images
+      prompt: "Enter comma-separated images from registry.access.redhat.com (e.g. ubi8/ubi:latest,ubi8-minimal:latest)"
+      private: no
+
+    - name: quay_images
+      prompt: "Enter comma-separated images from quay.io (e.g. openshift-release-dev/ocp-release:4.15.0-x86_64,coreos/etcd:v3.5)"
+      private: no
+
+  vars:
+    console_redhat_url: "https://console.redhat.com/"
+    idrac_response_file: "/tmp/idrac_response.json"
+    console_response_file: "/tmp/console_redhat_response.html"
+
+  tasks:
+    - name: Ensure podman is installed
+      package:
+        name: podman
+        state: present
+
+    - name: Log in to registry.redhat.io
+      containers.podman.podman_login:
+        registry: registry.redhat.io
+        username: "{{ rh_username }}"
+        password: "{{ rh_password }}"
+
+    - name: Log in to registry.access.redhat.com
+      containers.podman.podman_login:
+        registry: registry.access.redhat.com
+        username: "{{ rh_username }}"
+        password: "{{ rh_password }}"
+
+    - name: Pull images from registry.redhat.io
+      containers.podman.podman_image:
+        name: "registry.redhat.io/{{ item }}"
+      loop: "{{ registry_redhat_io_images.split(',') | map('trim') | list }}"
+
+    - name: Pull images from registry.access.redhat.com
+      containers.podman.podman_image:
+        name: "registry.access.redhat.com/{{ item }}"
+      loop: "{{ registry_access_images.split(',') | map('trim') | list }}"
+
+    - name: Pull images from quay.io
+      containers.podman.podman_image:
+        name: "quay.io/{{ item }}"
+      loop: "{{ quay_images.split(',') | map('trim') | list }}"
+
+    - name: Curl iDRAC interface
+      uri:
+        url: "https://{{ idrac_host }}/redfish/v1/Systems/System.Embedded.1"
+        method: GET
+        validate_certs: no
+        return_content: yes
+      register: idrac_response
+
+    - name: Save iDRAC response to file
+      copy:
+        content: "{{ idrac_response.content }}"
+        dest: "{{ idrac_response_file }}"
+
+    - name: Print iDRAC HTTP status code
+      debug:
+        msg: "iDRAC at {{ idrac_host }} returned HTTP status {{ idrac_response.status }} and was saved to {{ idrac_response_file }}"
+
+    - name: Curl console.redhat.com
+      uri:
+        url: "{{ console_redhat_url }}"
+        method: GET
+        return_content: yes
+      register: console_response
+
+    - name: Save console.redhat.com response to file
+      copy:
+        content: "{{ console_response.content }}"
+        dest: "{{ console_response_file }}"
+
+    - name: Print console.redhat.com HTTP status code
+      debug:
+        msg: "console.redhat.com returned HTTP status {{ console_response.status }} and was saved to {{ console_response_file }}"
+
+    - name: Log out from registry.redhat.io
+      containers.podman.podman_logout:
+        registry: registry.redhat.io
+
+    - name: Log out from registry.access.redhat.com
+      containers.podman.podman_logout:
+        registry: registry.access.redhat.com
