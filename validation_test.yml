@@ -1,5 +1,5 @@
 ---
-- name: Pull images, validate OpenShift DNS/ports, NTP server, and curl endpoints
+- name: Pull images, validate OpenShift DNS/ports, validate NTP, curl endpoints, and collect iDRAC MAC addresses
   hosts: all
   become: true
 
@@ -12,7 +12,7 @@
     console_response_file: "/tmp/console_redhat_response.html"
 
   tasks:
-    # --- DNS validation (OpenShift API) ---
+    # --- DNS validation ---
     - name: Check DNS resolution for OpenShift API
       command: "host {{ openshift_api }}"
       register: dns_api
@@ -23,8 +23,7 @@
       debug:
         var: dns_api.stdout
 
-    # --- DNS validation (OpenShift apps wildcard host) ---
-    - name: Check DNS resolution for OpenShift apps host
+    - name: Check DNS resolution for OpenShift apps wildcard (sample host)
       command: "host {{ openshift_apps_host }}"
       register: dns_apps
       changed_when: false
@@ -34,7 +33,7 @@
       debug:
         var: dns_apps.stdout
 
-    # --- Port checks ---
+    # --- Port reachability checks ---
     - name: Check port {{ openshift_api_port }} on OpenShift API host
       wait_for:
         host: "{{ openshift_api }}"
@@ -49,7 +48,7 @@
         timeout: 5
         state: started
 
-    # --- NTP server checks ---
+    # --- NTP server validation ---
     - name: Check DNS resolution for NTP server
       command: "host {{ ntp_server }}"
       register: dns_ntp
@@ -68,20 +67,15 @@
         state: started
         udp: yes
 
-    - name: Ensure ntpdate is installed
-      package:
-        name: ntpdate
-        state: present
-
-    - name: Test NTP query against server with ntpdate
-      command: "ntpdate -q {{ ntp_server }}"
-      register: ntpdate_out
+    - name: Test NTP query (chronyc sources)
+      command: "chronyc -n sources"
+      register: chronyc_out
       changed_when: false
-      failed_when: ntpdate_out.rc != 0
+      failed_when: chronyc_out.rc != 0
 
-    - name: Display NTP query output
+    - name: Display NTP sources (chronyc output)
       debug:
-        var: ntpdate_out.stdout
+        var: chronyc_out.stdout
 
     # --- Ensure podman installed ---
     - name: Ensure podman is installed
@@ -118,7 +112,7 @@
         name: "quay.io/{{ item }}"
       loop: "{{ quay_images.split(',') | map('trim') | list }}"
 
-    # --- Curl endpoints ---
+    # --- Curl iDRAC base endpoint ---
     - name: Curl iDRAC interface
       uri:
         url: "https://{{ idrac_host }}/redfish/v1/Systems/System.Embedded.1"
@@ -136,6 +130,37 @@
       debug:
         msg: "iDRAC at {{ idrac_host }} returned HTTP status {{ idrac_response.status }} and was saved to {{ idrac_response_file }}"
 
+    # --- Collect MAC addresses from iDRAC Redfish ---
+    - name: Query iDRAC Ethernet Interfaces
+      uri:
+        url: "https://{{ idrac_host }}/redfish/v1/Systems/System.Embedded.1/EthernetInterfaces"
+        method: GET
+        validate_certs: no
+        return_content: yes
+      register: idrac_eth_list
+
+    - name: Parse EthernetInterfaces members
+      set_fact:
+        idrac_eth_endpoints: "{{ idrac_eth_list.json.Members | map(attribute='@odata.id') | list }}"
+
+    - name: Query each EthernetInterface for MACAddress
+      uri:
+        url: "https://{{ idrac_host }}{{ item }}"
+        method: GET
+        validate_certs: no
+        return_content: yes
+      loop: "{{ idrac_eth_endpoints }}"
+      register: idrac_nic_info
+
+    - name: Extract MAC addresses
+      set_fact:
+        idrac_mac_addresses: "{{ idrac_nic_info.results | map(attribute='json.MACAddress') | list }}"
+
+    - name: Display MAC addresses
+      debug:
+        var: idrac_mac_addresses
+
+    # --- Curl console.redhat.com ---
     - name: Curl console.redhat.com
       uri:
         url: "{{ console_redhat_url }}"
