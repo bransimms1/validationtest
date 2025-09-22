@@ -5,8 +5,9 @@ What this does:
 3. Validate DNS + UDP/123 and do an ntpdate -q against your NTP server
 4. Logs in to Red Hat registries.
 5. Loops over and pulls every image you listed for each registry.
-6. Curls the iDRAC endpoint and console.redhat.com, showing HTTP status codes.
-7. Logs out of the Red Hat registries at the end.
+6. Curls the iDRAC endpoint and collects endpoint MAC addresses
+7. Curls console.redhat.com, showing HTTP status codes.
+8. Logs out of the Red Hat registries at the end.
 
 
 How to Run:
