@@ -70,13 +70,24 @@
       debug:
         var: dns_ntp.stdout
 
-    - name: Check UDP 123 connectivity to NTP server
-      wait_for:
-        host: "{{ ntp_server }}"
-        port: 123
-        timeout: 5
-        state: started
-        udp: yes
+# This can't work, as the wait_for module only looks at TCP connections.
+#    - name: Check UDP 123 connectivity to NTP server
+#      wait_for:
+#        host: "{{ ntp_server }}"
+#        port: 123
+#        timeout: 5
+#        state: started
+#        udp: yes
+
+# It should look something more like this
+    - name: Ensure NetCat is installed
+      package:
+        name: netcat
+        state: installed
+        
+# Verbose NetCat command, that sends 1 UDP packet to the ntp_server. reporting on only the connection status with a 5 second time out to port 123/UDP
+    - name: Check UDP 123 connectivity to NTP Server
+      command: "nc -v -u -z -w 5 {{ ntp_server }} 123"
 
     - name: Test NTP query (chronyc sources)
       command: "chronyc -n sources"
