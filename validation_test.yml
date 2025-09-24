@@ -1,3 +1,14 @@
+# -----------------------------------------------------------------------------
+# Ansible Playbook to:
+#  - Pull container images from registry.redhat.io, registry.access.redhat.com,
+#    and quay.io
+#  - Curl iDRAC interface and console.redhat.com
+#  - Validate DNS for OpenShift API and wildcard
+#  - Check NTP server connectivity
+#  - Collect iDRAC MAC address information
+#
+# Licensed under the MIT License – see LICENSE file for details.
+# -----------------------------------------------------------------------------
 ---
 - name: Pull images, validate OpenShift DNS/ports, validate NTP, curl endpoints, and collect iDRAC MAC addresses
   hosts: all
